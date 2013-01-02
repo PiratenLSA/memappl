@@ -13,3 +13,5 @@ TODO:
 -   Einstellungen für die Lösch-/erinnerungszeiten
 -   Übersetzungen
 -   PGP-Unterstützung
+-   konfigurierbare E-Mail templates
+-   Nutzung von tokens
