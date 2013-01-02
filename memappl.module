@@ -1,0 +1,579 @@
+<?php
+// $Id$
+
+define('MEMAPPL_DELETE_AFTER', 60 * 60 * 24 * 7);
+define('MEMAPPL_REMBEBER_AFTER', 60 * 60 * 24 * 7);
+
+function memappl_getstates($v = NULL) {
+  $arr = array(
+    'bw' => t('Baden-Württemberg'),
+    'by' => t('Bayern'),
+    'be' => t('Berlin'),
+    'bb' => t('Brandenburg'),
+    'hb' => t('Bremen'),
+    'hh' => t('Hamburg'),
+    'he' => t('Hessen'),
+    'mv' => t('Mecklenburg-Vorpommern'),
+    'ni' => t('Niedersachsen'),
+    'nw' => t('Nordrhein-Westfalen'),
+    'rp' => t('Rheinland-Pfalz'),
+    'sl' => t('Saarland'),
+    'sn' => t('Sachsen'),
+    'st' => t('Sachsen-Anhalt'),
+    'sh' => t('Schleswig-Holstein'),
+    'th' => t('Thüringen')
+  );
+
+  if ($v == NULL)
+    return $arr;
+  else
+    return $arr[$v];
+}
+
+function memappl_getdistricts($v = NULL) {
+  $arr = array(
+    'und' => t('außerhalb von Sachsen-Anhalt'),
+    'saw' => t('Altmarkkreis Salzwedel'),
+    'abi' => t('Anhalt-Bitterfeld'),
+    'bk' => t('Börde'),
+    'blk' => t('Burgenlandkreis'),
+    'de' => t('Dessau-Roßlau'),
+    'hal' => t('Halle (Saale)'),
+    'hz' => t('Harz'),
+    'jl' => t('Jerichower Land'),
+    'md' => t('Magdeburg'),
+    'msh' => t('Mansfeld-Südharz'),
+    'sk' => t('Saalekreis'),
+    'slk' => t('Salzlandkreis'),
+    'sdl' => t('Stendal'),
+    'wb' => t('Wittenberg')
+  );
+
+  if ($v == NULL)
+    return $arr;
+  else
+    return $arr[$v];
+}
+
+/**
+ * Valid permissions for this module
+ * @return array An array of valid permissions for the onthisdate module
+ */
+function memappl_permission() {
+  return array(
+    'administer memappl' => array(
+      'title' => t('Administer Membership Application'),
+      'description' => t('Edit the settings of the membership application form.')
+    ),
+    'access memappl' => array(
+      'title' => t('Access Membership Application'),
+      'description' => t('Have the permission to open the membership application form and fill in.')
+    )
+  );
+}
+
+/**
+ * Menu for this module
+ * @return array An array with this module's settings.
+ */
+function memappl_menu() {
+  $items = array();
+
+  $items['online-mitgliedsantrag'] = array(
+    'title' => t('Onlinemitgliedsantrag'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('memappl_input_form'),
+    'access arguments' => array('access memappl'),
+  );
+
+  $items['online-mitgliedsantrag/bestaetigung/%/%'] = array(
+    'title' => t('Onlinemitgliedsantrag bestätigen'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('memappl_confirm_form', 2, 3),
+    'access arguments' => array('access memappl'),
+  );
+
+  $items['admin/config/content/online-mitgliedsantrag'] = array(
+    'title' => t('Onlinemitgliedsantrag'),
+    'description' => t('Konfiguration der Standardwerte des Onlinemitgliedsantrags'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('memappl_administer_form'),
+    'access arguments' => array('administer memappl'),
+  );
+
+  return $items;
+}
+
+/**
+ * The callback function (form constructor) that creates the HTML form for administration of membership application.
+ * @return form an array of form data.
+ */
+function memappl_administer_form($form, &$form_state) {
+  $intro = variable_get('memappl_intro', array('value' => '', 'format' => NULL));
+
+  $form['memappl_intro'] = array(
+    '#type' => 'text_format',
+    '#title' => t('Intro'),
+    '#default_value' => $intro['value'],
+    '#description' => t('Text that will be shown in front of the application form.'),
+    '#format' => $intro['format']
+  );
+
+  $form['memappl_emailaddress'] = array(
+    '#type' => 'emailfield',
+    '#title' => t('E-mail address'),
+    '#default_value' => variable_get('memappl_emailaddress', ''),
+    '#description' => t("e-mail adress to send the filled data of the membership applications"),
+  );
+
+  $form['memappl_state'] = array(
+    '#type' => 'select',
+    '#title' => t('Default') . ' ' . t('Federal State'),
+    '#default_value' => variable_get('memappl_state', 'st'),
+    '#options' => memappl_getstates(),
+  );
+
+  $form['memappl_district'] = array(
+    '#type' => 'select',
+    '#title' => t('Default') . ' ' . t('Administrative District'),
+    '#default_value' => variable_get('memappl_district', 'und'),
+    '#options' => memappl_getdistricts(),
+  );
+
+  return system_settings_form($form);
+}
+
+function memappl_administer_form_validate($form, &$form_state) {
+  $valid_email = $form_state['values']['memappl_emailaddress'];
+  if (!valid_email_address($valid_email)) {
+    form_set_error('email', t('Deine E-Mail Adresse "@emailaddr" is nicht gültig.', array('emailaddr' => $valid_email)));
+  }
+}
+
+/**
+ * The callback function (form constructor) that creates the HTML form for membership application.
+ * @return form an array of form data.
+ */
+function memappl_input_form($form, &$form_state) {
+  $intro = variable_get('memappl_intro', array('value' => '', 'format' => NULL));
+
+  if (!empty($intro['value'])) {
+    $form['intro'] = array(
+      '#markup' => check_markup($intro['value'], $intro['format'])
+    );
+  }
+
+  $form['#attached']['js'] = array(
+    drupal_get_path('module', 'memappl') . '/memappl.js',
+  );
+
+  $form['general'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Allgemein'),
+    '#collapsible' => FALSE,
+  );
+
+  $form['general']['firstname'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Vorname'),
+    '#required' => TRUE,
+    '#rules' => array('alpha_dash'),
+    '#filters' => array('trim')
+  );
+
+  $form['general']['lastname'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Nachname'),
+    '#required' => TRUE,
+    '#rules' => array('alpha_dash'),
+    '#filters' => array('trim')
+  );
+
+  $form['general']['birthday'] = array(
+    '#type' => 'date_popup',
+    '#title' => t('Geburtstag'),
+    '#date_format' => 'd.m.Y',
+    '#date_year_range' => '-120:-16',
+    '#date_label_position' => 'none',
+    '#description' => t('Mitglied in der Piratenpartei Deutschland kann jede Person werden, '
+        . 'die das 16te Lebensjahr vollendet hat. Bei minderjährigen Antragstellern muss dieser '
+        . 'Antrag schriftlich eingereicht und von den Erziehungsberechtigten unterschrieben werden.'),
+    '#required' => TRUE
+  );
+
+  $form['general']['nationality'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Nationalität'),
+    '#description' => t('Der Besitz der Deutsche Staatsbürgerschaft ist für eine Mitgliedschaft nicht notwendig.'),
+    '#default_value' => t('Deutsch'),
+    '#required' => TRUE,
+    '#rules' => array('alpha_dash'),
+    '#filters' => array('trim')
+  );
+
+  $form['address'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Adresse'),
+    '#description' => t('Bitte gib hier deine Adresse ein, an der wir Post schicken können. '
+        . 'Bei dem Versand von Einladungen zu Aufstellungsversammlungen nehmen wir an, '
+        . 'dass dies der Erstwohnsitz ist. Die Angabe von mehreren Adressen oder ein '
+        . 'entsprechender Vermerk ist derzeit nicht möglich.'),
+    '#collapsible' => FALSE,
+  );
+
+  $form['address']['street'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Straße + Hausnummer'),
+    '#required' => TRUE,
+    '#rules' => array('alpha_dash'),
+    '#filters' => array('trim')
+  );
+
+  $form['address']['postcode'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Postleitzahl'),
+    '#required' => TRUE,
+  );
+
+  $form['address']['city'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Stadt'),
+    '#required' => TRUE,
+  );
+
+  $form['address']['state'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Staat'),
+    '#default_value' => t('Deutschland'),
+    '#description' => t('Die Angabe bezieht sich auf die angegebene Adresse.'),
+    '#required' => TRUE,
+  );
+
+  $form['address']['federal_state'] = array(
+    '#type' => 'select',
+    '#title' => t('Bundesland'),
+    '#default_value' => variable_get('memappl_state', 'st'),
+    '#options' => memappl_getstates(),
+    '#description' => t('Die Angabe bezieht sich auf die angegebene Adresse. Durch die '
+        . 'Benutzung dieses Mitgliedsantrags nehmen wir an, dass du Mitglied im Landesverband '
+        . 'Sachsen-Anhalt werden möchtest.'),
+    '#required' => TRUE,
+  );
+
+  $form['address']['administrative_district'] = array(
+    '#type' => 'select',
+    '#title' => t('Landkreis'),
+    '#default_value' => variable_get('memappl_district', 'und'),
+    '#options' => memappl_getdistricts(),
+    '#description' => t('Die Angabe bezieht sich auf die angegebene Adresse. Möchtest du in einem '
+        . 'anderen Kreisverband Mitglied sein, so schreibe dies in die Bemerkungen und begründe dies.'),
+    '#required' => TRUE,
+  );
+
+  $form['contact'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Kontakt'),
+    '#collapsible' => FALSE,
+  );
+
+  $form['contact']['email'] = array(
+    '#type' => 'emailfield',
+    '#title' => t('E-Mail Adresse'),
+    '#description' => t('Die Kommunikation der Piratenpartei erfolgt zu großen Teilen per E-Mail. '
+        . 'Ein funktionierendes E-Mail-Konto wird daher empfohlen.'),
+    '#required' => TRUE,
+  );
+
+  $form['contact']['email_repeat'] = array(
+    '#type' => 'emailfield',
+    '#title' => t('E-Mail Adresse (wiederholen)'),
+    '#description' => t('Bitte wiederhole die E-Mail Adresse und überprüfe, ob sie richtig ist.'),
+    '#required' => TRUE,
+    '#attributes' => array(
+      'oninput' => 'checkemailequals(this, document.getElementById(\'edit-email\'))'
+    )
+  );
+
+  $form['contact']['phone'] = array(
+    '#type' => 'telfield',
+    '#title' => t('Telefon'),
+    '#required' => FALSE,
+  );
+
+  $form['misc'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Sonstiges'),
+    '#collapsible' => FALSE,
+  );
+
+  $form['misc']['terms'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Ich habe die Angaben wahrheitsgemäß eingegeben, die Satzung gelesen und wurde bisher noch nicht aus der Partei durch ein Parteiausschlussverfahren ausgeschlossen.'),
+    '#required' => TRUE,
+  );
+
+  $form['misc']['refused_in_the_past'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('In der Vergangenheit wurde bereits ein Mitgliedsantrag von mir bei einer Gliederung der Piratenpartei abgelehnt.'),
+    '#required' => FALSE,
+  );
+
+  $form['remarks'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Bemerkungen'),
+    '#description' => t('Hier kannst du Bemerkungen hinterlassen.'),
+    '#required' => FALSE,
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Send')
+  );
+
+  return $form;
+}
+
+/**
+ * Form validation for this module's settings
+ * @param form an array that contains this module's settings
+ * @param form_state an array that contains this module's settings
+ */
+function memappl_input_form_validate($form, &$form_state) {
+  $valid_email = $form_state['values']['email'];
+  $valid_email_repeat = $form_state['values']['email_repeat'];
+  if (!valid_email_address($valid_email)) {
+    form_set_error('email', t('Deine E-Mail Adresse "@emailaddr" is nicht gültig.', array('emailaddr' => $valid_email)));
+  }
+
+  if ($valid_email != $valid_email_repeat) {
+    form_set_error('email_repeat', t('Die angegebenen E-Mail Adressen unterscheiden sich.'));
+  }
+}
+
+function memappl_input_form_submit($form, &$form_state) {
+  $confirmcode = sha1(uniqid(mt_rand(), true));
+
+  $id = db_insert('memappl')
+  ->fields(array(
+    'first_submit' => REQUEST_TIME,
+    'confirmcode' => $confirmcode,
+    'firstname' => $form_state['values']['firstname'],
+    'lastname' => $form_state['values']['lastname'],
+    'birthday' => $form_state['values']['birthday'],
+    'nationality' => $form_state['values']['nationality'],
+    'street' => $form_state['values']['street'],
+    'postcode' => $form_state['values']['postcode'],
+    'city' => $form_state['values']['city'],
+    'state' => $form_state['values']['state'],
+    'federal_state' => $form_state['values']['federal_state'],
+    'administrative_district' => $form_state['values']['administrative_district'],
+    'email_address' => $form_state['values']['email'],
+    'phone_number' => $form_state['values']['phone'],
+    'remarks' => $form_state['values']['remarks'],
+    'refused_in_the_past' => $form_state['values']['refused_in_the_past'],
+  ))
+  ->execute();
+
+  $params = array(
+    'id' => $id,
+    'confirmcode' => $confirmcode,
+  );
+
+  drupal_mail('memappl', 'confirm', $form_state['values']['email'], language_default(), $params);
+
+  drupal_set_message(t('Vielen Dank für deinen Mitgliedsantrag. Du hast von uns eine E-Mail erhalten, '
+      . 'in der ein Link enthalten ist. Dieser muss aufgerufen und auf der Seite bestätigt werden.'));
+}
+
+/**
+ * The callback function (form constructor) that creates the HTML form for confirmation of e-mail address.
+ * @return form an array of form data.
+ */
+function memappl_confirm_form($form, &$form_state, $id, $confirmcode) {
+  $numrows = db_select('memappl', 'm')
+  ->condition('m.id', $id)
+  ->condition('m.confirmcode', $confirmcode)
+  ->isNull('m.confirmed')
+  ->range(0, 1)
+  ->countQuery()->execute()->fetchField();
+
+  if ($numrows == 0) {
+    $form['info'] = array(
+      '#markup' => t('Dieser Mitgliedsantrag existiert nicht (mehr), wurde bereits bestätigt oder zurückgezogen.'),
+    );
+
+    return $form;
+  }
+
+  $form['id'] = array('#type' => 'value', '#value' => $id);
+  $form['confirmcode'] = array('#type' => 'value', '#value' => $confirmcode);
+
+  $form['info'] = array(
+    '#markup' => t('Du oder jemand anderes hat einen Antrag auf Mitgliedschaft gestellt. '
+        . 'Bitte bestätige, dass du diesen Antrag gestellt hast und dir die E-Mail Adresse gehört.'),
+  );
+
+  $form['confirm'] = array(
+    '#type' => 'radios',
+    '#title' => t('Bestätigung des Mitgliedsantrags'),
+    '#default_value' => 1,
+    '#options' => array(0 => t('Ich bestätige den Mitgliedsantrag.'), 1 => t('Dieser Mitgliedsantrag ist nicht von mir oder ich ziehe ihn zurück.')),
+    '#required' => TRUE,
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Send')
+  );
+
+  return $form;
+}
+
+function memappl_confirm_form_submit($form, &$form_state) {
+  $result = db_select('memappl', 'm')
+  ->fields('m', array(
+    'id', 'firstname', 'lastname', 'birthday', 'nationality', 'street',
+    'postcode', 'city', 'state', 'federal_state', 'administrative_district',
+    'email_address', 'phone_number', 'remarks', 'refused_in_the_past'))
+    ->condition('m.id', $form_state['values']['id'])
+    ->condition('m.confirmcode', $form_state['values']['confirmcode'])
+    ->isNull('m.confirmed')
+    ->range(0, 1)
+    ->execute();
+
+  $numrows = $result->rowCount();
+
+  if ($numrows == 0) {
+    $form['info'] = array(
+      '#markup' => t('Dieser Mitgliedsantrag existiert nicht (mehr), wurde bereits bestätigt oder zurückgezogen.'),
+    );
+
+    return $form;
+  }
+
+  $record = $result->fetchAssoc();
+
+  db_update('memappl')
+  ->fields(array(
+  'confirmed' => REQUEST_TIME,
+  'canceled' => $form_state['values']['confirm'],
+  ))
+  ->condition('id', $form_state['values']['id'])
+  ->execute();
+
+  if ($form_state['values']['confirm'] == 0) {
+    drupal_mail('memappl', 'confirmed', $record['email_address'], language_default(), $record);
+
+    drupal_mail('memappl', 'newapplication', variable_get('memappl_emailaddress', ''), language_default(), array_merge($record, array('confirmed' => REQUEST_TIME)));
+
+    drupal_set_message(t('Vielen Dank für die Bestätigung. Wir werden deinen Mitgliedsantrag bearbeiten und uns bei dir per E-Mail melden.'));
+  } else {
+    drupal_set_message(t('Dein Mitgliedsantrag wurde zurückgezogen.'));
+  }
+
+  $form_state['redirect'] = 'online-mitgliedsantrag';
+}
+
+function memappl_mail($key, &$message, $params) {
+  $variables = array(
+    '@site' => variable_get('site_name', "Piratenpartei"),
+  );
+
+  foreach ($params as $pkey => $pvalue) {
+    if ($pkey == 'confirmed' || $pkey == 'first_submit') {
+      $variables['@' . $pkey] = format_date($pvalue, 'long');
+    } else if ($pkey == 'federal_state') {
+      $variables['@' . $pkey] = memappl_getstates($pvalue);
+    } else if ($pkey == 'administrative_district') {
+      $variables['@' . $pkey] = memappl_getdistricts($pvalue);
+    } else if ($pkey == 'refused_in_the_past') {
+      $variables['@' . $pkey] = $pvalue == 1 ? t('yes') : t('no');
+    } else {
+      $variables['@' . $pkey] = $pvalue;
+    }
+  }
+
+  switch($key) {
+    case 'confirm':
+      $variables['@bestaetigung'] = url('online-mitgliedsantrag/bestaetigung/' . $params['id'] . '/' . $params['confirmcode'], array('absolute' => TRUE, 'https' => TRUE));
+
+      $message['subject'] = t('Bestätigung des Mitgliedsantrags von @site', $variables);
+
+      $message['body'][] = t("Ahoi,\n\nauf unserer Webseite wurde der Onlinemitgliedsantrag "
+          . "mit deiner E-Mail Adresse ausgefüllt.\n\nFalls du den Mitgliedsantrag wirklich "
+          . "ausgfüllt hast, so folge bitte folgenden Link und bestätige den Antrag:\n\n"
+          . "@bestaetigung\n\n"
+          . "-- \n@site", $variables);
+      break;
+    case 'reminder':
+      $variables['@bestaetigung'] = url('online-mitgliedsantrag/bestaetigung/' . $variables['@id'] . '/' . $variables['@confirmcode'], array('absolute' => TRUE, 'https' => TRUE));
+
+      $message['subject'] = t('Erinnerung an Bestätigung des Mitgliedsantrags von @site', $variables);
+
+      $message['body'][] = t("Ahoi,\n\nvor sieben Tagen wurde auf unserer Webseite ein Onlinemitgliedsantrag "
+          . "mit deiner E-Mail Adresse ausgefüllt. Wir haben dir hierzu eine E-Mail zugeschickt. "
+          . "Diese wurde mit dem enthaltenen Link leider noch nicht bestätigt. Tust du dies nicht, wird der "
+          . "Antrag in weiteren sieben Tagen gelöscht.\n\nFalls du den Mitgliedsantrag nun bestätigen "
+          . "möchtest, so folge bitte folgenden Link:\n\n"
+          . "@bestaetigung\n\n"
+          . "-- \n@site", $variables);
+
+      break;
+    case 'confirmed':
+      $message['subject'] = t('Bestätigung des Mitgliedsantrags von @site erhalten', $variables);
+
+      $message['body'][] = t("Ahoi,\n\ndu hast deinen Mitgliedsantrag erfolgreich bestätigt. "
+          . "Wir werden diesen bearbeiten und uns per E-Mail bei dir melden.\n\n"
+          . "-- \n@site", $variables);
+      break;
+    case 'newapplication':
+      $message['subject'] = t('Online Mitgliedsantrag');
+
+      $message['body'][] = t("Es ist ein neuer Mitgliedsantrag eingegangen:\n\n"
+          . "Datum: @confirmed\n\n"
+          . "Vorname: @firstname\n"
+          . "Nachname: @lastname\n"
+          . "Geburtstag: @birthday\n"
+          . "Nationalität: @nationality\n\n"
+          . "Adresse:\n@street\n@postcode @city\n\n"
+          . "Staat: @state\n"
+          . "Bundesland: @federal_state\n"
+          . "Landkreis: @administrative_district\n\n"
+          . "E-Mail Adresse: @email_address\n"
+          . "Telefonnummer: @phone_number\n\n"
+          . "Bemerkungen:\n@remarks\n\n"
+          . "Es wurde bereits ein Mitgliedsantrag von mir abgelehnt: @refused_in_the_past\n\n"
+          . "-- \n@site", $variables);
+      break;
+  }
+}
+
+function memappl_cron() {
+  // delete all confirmed and reminded applications after 7 days
+  $confirmed = db_and()->condition('confirmed', REQUEST_TIME - MEMAPPL_DELETE_AFTER, '<=');
+  $remindersend = db_and()->condition('reminder_send', REQUEST_TIME - MEMAPPL_DELETE_AFTER, '<=');
+  db_delete('memappl')
+  ->condition(db_or()->condition($confirmed)->condition($remindersend))
+  ->execute();
+
+  // send reminder
+  $result = db_select('memappl', 'm')
+  ->fields('m', array('id', 'confirmcode', 'email_address'))
+  ->condition('m.first_submit', REQUEST_TIME - MEMAPPL_REMEMBER_AFTER, '<=')
+  ->isNull('m.confirmed')
+  ->isNull('m.reminder_send')
+  ->execute();
+
+  while ($record = $result->fetchAssoc()) {
+    drupal_mail('memappl', 'reminder', $record['email_address'], language_default(), $record);
+  }
+
+  db_update('memappl')
+  ->fields(array(
+  'reminder_send' => REQUEST_TIME,
+  ))
+  ->condition('first_submit', REQUEST_TIME - MEMAPPL_REMEMBER_AFTER, '<=')
+  ->isNull('confirmed')
+  ->isNull('reminder_send')
+  ->execute();
+}

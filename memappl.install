@@ -1,0 +1,151 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ */
+function memappl_schema() {
+  $schema['memappl'] = array(
+    'description' => 'table for module memappl to store membership applications',
+    'fields' => array(
+      'id' => array(
+        'description' => 'primary id key',
+        'type' => 'serial',
+        'not null' => TRUE,
+      ),
+      'first_submit' => array(
+        'description' => 'unix timestamp when form submited',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'reminder_send' => array(
+        'description' => 'unix timestamp when reminder e-mail was send',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'confirmed' => array(
+        'description' => 'unix timestamp when e-mail address was confirmed by link',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'confirmcode' => array(
+        'description' => 'code (sha1) to use for e-mail address confirmation',
+        'type' => 'varchar',
+        'length' => '40',
+        'not null' => TRUE,
+      ),
+      'canceled' => array(
+        'description' => 'bool: true if application was canceled',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'firstname' => array(
+        'description' => 'the firstname of person',
+        'type' => 'varchar',
+        'length' => '50',
+        'not null' => TRUE,
+      ),
+      'lastname' => array(
+        'description' => 'the lastname of person',
+        'type' => 'varchar',
+        'length' => '50',
+        'not null' => TRUE,
+      ),
+      'birthday' => array(
+        'description' => 'the birthday in YYYY-mm-dd format',
+        'type' => 'varchar',
+        'length' => '10',
+        'not null' => TRUE,
+      ),
+      'nationality' => array(
+        'description' => 'the nationality of person',
+        'type' => 'varchar',
+        'length' => '50',
+        'not null' => TRUE,
+      ),
+      'street' => array(
+        'description' => 'the street (with number) where person live',
+        'type' => 'varchar',
+        'length' => '50',
+        'not null' => TRUE,
+      ),
+      'postcode' => array(
+        'description' => 'the postcode of city where person live',
+        'type' => 'varchar',
+        'length' => '10',
+        'not null' => TRUE,
+      ),
+      'city' => array(
+        'description' => 'city where person live',
+        'type' => 'varchar',
+        'length' => '50',
+        'not null' => TRUE,
+      ),
+      'state' => array(
+        'description' => 'state where person live',
+        'type' => 'varchar',
+        'length' => '50',
+        'not null' => TRUE,
+      ),
+      'federal_state' => array(
+        'description' => 'federal city where person live',
+        'type' => 'varchar',
+        'length' => '50',
+        'not null' => TRUE,
+      ),
+      'administrative_district' => array(
+        'description' => 'administrative district where person live',
+        'type' => 'varchar',
+        'length' => '50',
+        'not null' => TRUE,
+      ),
+      'email_address' => array(
+        'description' => 'e-mail address of person (would be tested)',
+        'type' => 'varchar',
+        'length' => '50',
+        'not null' => TRUE,
+      ),
+      'phone_number' => array(
+        'description' => 'the phone number of person (optional)',
+        'type' => 'varchar',
+        'length' => '50',
+        'not null' => FALSE,
+      ),
+      'remarks' => array(
+        'description' => 'person may enter remarks for the office',
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'refused_in_the_past' => array(
+        'description' => 'bool: true if membership application was refused in the past.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('id'),
+    'indexes' => array(
+      'confirmcode' => array('confirmcode'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * adding support for the checkbox "My membership application was refused in the past."
+ */
+function memappl_update_7000() {
+  $spec = array(
+    'description' => 'bool: true if membership application was refused in the past.',
+    'type' => 'int',
+    'size' => 'tiny',
+    'not null' => TRUE,
+    'default' => 0,
+  );
+  db_add_field('memappl', 'refused_in_the_past', $spec);
+}
+
+?>

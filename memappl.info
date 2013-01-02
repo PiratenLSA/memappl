@@ -1,0 +1,7 @@
+name = Membership Application
+description = "Online Membership Application"
+package = "Piratenpartei"
+core = 7.x
+dependencies[] = elements
+dependencies[] = date_popup
+configure = admin/config/content/online-mitgliedsantrag
