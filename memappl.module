@@ -2,7 +2,7 @@
 // $Id$
 
 define('MEMAPPL_DELETE_AFTER', 60 * 60 * 24 * 7);
-define('MEMAPPL_REMEBEBER_AFTER', 60 * 60 * 24 * 7);
+define('MEMAPPL_REMEMBER_AFTER', 60 * 60 * 24 * 7);
 
 function memappl_getstates($v = NULL) {
   $arr = array(
