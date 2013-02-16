@@ -527,6 +527,7 @@ function memappl_mail($key, &$message, $params) {
           . "-- \n@site", $variables);
       break;
     case 'newapplication':
+      $message['headers']['Reply-To'] = $variables['@email_address'];
       $message['subject'] = t('Online Mitgliedsantrag');
 
       $message['body'][] = t("Es ist ein neuer Mitgliedsantrag eingegangen:\n\n"
